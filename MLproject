@@ -1,0 +1,10 @@
+name: Bottle Recognition
+
+
+conda_env: conda.yaml
+
+
+entry_points:
+
+    pull_raw_dataset:
+        command: "bash utils/download_extract_ds.sh"
