@@ -1,8 +1,11 @@
-detect-1
+detect-1/
 yolov8n.pt
 http/
 runs/
 
+
+LoadModel/
+mlruns/
 
 
 # Byte-compiled / optimized / DLL files
