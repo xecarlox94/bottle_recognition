@@ -3,6 +3,8 @@ yolov8n.pt
 http/
 runs/
 
+*.jpeg
+*.sav
 
 LoadModel/
 mlruns/
