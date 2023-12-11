@@ -16,6 +16,7 @@ model = YOLO('yolov8n.pt')
 
 dataset_yaml = './detect-1/data.yaml'
 
+mlflow.set_experiment("ultralytics/yolov5")
 
 with mlflow.start_run() as run:
     model.train(data=dataset_yaml, epochs=1, imgsz=640, device=0)
@@ -50,56 +51,25 @@ with mlflow.start_run() as run:
     #########################################################
     # TODO: switch statement for each task
 
-    from mlflow.models import ModelSignature
-    import numpy as np
-    from mlflow.models import ModelSignature, infer_signature
-    from mlflow.types.schema import Schema, TensorSpec
-    input_schema = Schema(
-        [
-            TensorSpec(np.dtype(np.float64), (-1, 640, 640, 3)),
-        ]
-    )
 
-    output_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, 2))])
-
-    signature = ModelSignature(inputs=input_schema, outputs=output_schema)
-
-
-    # https://pytorch.org/tutorials/beginner/basics/data_tutorial.html
-    dataset = trainer.train_loader.dataset
-    dataloader = trainer.get_dataloader(dataset.data['train'])
-
-
-    # https://docs.ultralytics.com/modes/predict/#working-with-results
-    result = next(iter(dataloader))
-
-
-    # https://docs.ultralytics.com/modes/train/#key-features-of-train-mode
-    yolo_model = YOLO(trainer.best)
-
-    X_train = result['img']
-
-    img = result['im_file'][0]
-    rst = yolo_model(img)
+    from PIL import Image
 
     from torchvision import transforms
-
-    import numpy as np
-
     convert_tensor = transforms.ToTensor()
 
-    # original image
-    img_npy = rst[0].orig_img
 
-    #####
-    img_this = convert_tensor(img_npy).cuda()
-    tensor_image = (img_this * 255).float()
-    # Add batch dimension
-    tensor_image = tensor_image.unsqueeze(0)
+    dataset = trainer.train_loader.dataset
 
+    from torch.utils.data import DataLoader
+    
+    dataloader = DataLoader(dataset)
 
-    # possible y
-    y_train = trainer.model(tensor_image)
+    pil_img = Image.open(dataset.im_files[0])
+
+    yolo_model = YOLO(trainer.best)
+
+    X = convert_tensor(pil_img)
+    y = yolo_model(X)
 
 
     # model_type = type(trainer.model)
@@ -117,24 +87,36 @@ with mlflow.start_run() as run:
     #     y_train = result['masks']
 
 
-    y_train = y_train.detach().cpu().numpy()
-
-
     # Important
     # https://mlflow.org/docs/latest/models.html#tensor-based-signature-example
 
-    sig = infer_signature(
-        # X_train.detach().cpu().numpy(),
-        tensor_image.cpu().numpy(),
-        np.asarray((y_train[0].data).detach().cpu()),
+
+    """
+    from mlflow.models import ModelSignature
+    import numpy as np
+    from mlflow.models import ModelSignature, infer_signature
+    from mlflow.types.schema import Schema, TensorSpec
+    input_schema = Schema(
+        [
+            TensorSpec(np.dtype(np.float64), (-1, 640, 640, 3)),
+        ]
+    )
+
+    output_schema = Schema([TensorSpec(np.dtype(np.float32), (-1, 2))])
+
+    signature = ModelSignature(inputs=input_schema, outputs=output_schema)
+    """
+    signature = infer_signature(
+        X.cpu().numpy(),
+        y.detach().cpu().numpy(),
         params={
             "param_test": 123
         }
     )
 
 
-    mlflow.pytorch.log_model(
-        trainer.model,
+    mlflow.pyfunc.log_model(
+        trainer.best,
         join(RUNS_DIR.name, "Model"),
         signature=signature
     )
